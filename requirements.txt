@@ -148,4 +148,11 @@ python-dotenv
 python-multipart
 pypdf
 chromadb
-langchain
+SQLAlchemy
+psycopg2-binary
+pydantic
+pydantic-settings
+passlib
+bcrypt
+python-jose
+requests
