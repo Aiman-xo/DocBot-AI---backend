@@ -45,8 +45,8 @@ def authenticate_user(user_credentials:UserLogin,response:Response,db:Session = 
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,
-        samesite="lax"
+        secure=True,  # Changed to True for cross-domain support
+        samesite="none" # Changed to "none" for cross-domain support
     )
 
     return {
@@ -72,8 +72,8 @@ def logout(response: Response):
     response.delete_cookie(
         key="refresh_token",
         httponly=True,
-        secure=False, # Set to True in production with HTTPS
-        samesite="lax"
+        secure=True, # Must match the original cookie settings
+        samesite="none"
     )
     return {"message": "Logged out successfully"}
 
