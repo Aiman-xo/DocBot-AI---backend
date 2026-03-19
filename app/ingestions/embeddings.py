@@ -9,24 +9,29 @@ def create_embeddings(chunks):
     if not chunks:
         return []
 
-    # Using batch embedding for much faster performance
-    # This prevents the "502 Bad Gateway" timeout by making 1 API call instead of dozens
-    response = genai.embed_content(
-        model="models/gemini-embedding-001",
-        content=chunks,
-        task_type="retrieval_document"
-    )
-
-    embeddings = []
-    # If a single chunk was passed as a string, wrap it in a list to handle it consistently
+    # If it's a single string, handle it separately
     if isinstance(chunks, str):
-        embeddings.append({
-            "text": chunks,
-            "embedding": response['embedding']
-        })
-    else:
-        # response['embedding'] will be a list of embedding vectors
-        for text, emb in zip(chunks, response['embedding']):
+        response = genai.embed_content(
+            model="models/gemini-embedding-001",
+            content=chunks,
+            task_type="retrieval_document"
+        )
+        return [{"text": chunks, "embedding": response['embedding']}]
+
+    # Batching to stay within Gemini API limits (usually ~100 items per call)
+    batch_size = 90  # Safe limit
+    embeddings = []
+
+    for i in range(0, len(chunks), batch_size):
+        current_batch = chunks[i : i + batch_size]
+        
+        response = genai.embed_content(
+            model="models/gemini-embedding-001",
+            content=current_batch,
+            task_type="retrieval_document"
+        )
+
+        for text, emb in zip(current_batch, response['embedding']):
             embeddings.append({
                 "text": text,
                 "embedding": emb

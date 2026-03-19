@@ -25,7 +25,7 @@ def ask_question(request,db,user):
     # to store to the db but now we only giving a single question to that so we write like  [question]
     # and from that we extract the ["embeddings"] were the vector data lies
     # after this step we get the vector data for the asked question
-    
+
     # Get question embedding with retrieval_query task type for better accuracy
     # Passing task_type="retrieval_query" is recommended for the search query
     from google.generativeai import embed_content
