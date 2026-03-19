@@ -25,8 +25,16 @@ def ask_question(request,db,user):
     # to store to the db but now we only giving a single question to that so we write like  [question]
     # and from that we extract the ["embeddings"] were the vector data lies
     # after this step we get the vector data for the asked question
-    question_embedding_data = create_embeddings([question])
-    requested_question_embedding = question_embedding_data[0]["embedding"]
+    
+    # Get question embedding with retrieval_query task type for better accuracy
+    # Passing task_type="retrieval_query" is recommended for the search query
+    from google.generativeai import embed_content
+    question_embedding_data = genai.embed_content(
+        model="models/gemini-embedding-001",
+        content=question,
+        task_type="retrieval_query"
+    )
+    requested_question_embedding = question_embedding_data["embedding"]
 
     # now we have to query through the vector_db collections to find the match
     results= collection.query(
@@ -44,6 +52,10 @@ def ask_question(request,db,user):
 
     # extracts the text 
     chunks = results["documents"][0]
+    
+    if not chunks:
+        return {"answer": "I'm sorry, I couldn't find any relevant information in the selected document to answer your question."}
+
     # joins all of the to create a string
     context = "\n".join(chunks)
 
@@ -76,11 +88,11 @@ def ask_question(request,db,user):
     try:
         response = model.generate_content(prompt)
     except Exception as e:
-        # Check if it's a rate limit exception (often ResourceExhausted, but it could be wrapped)
+        # Check if it's a rate limit exception
         error_str = str(e).lower()
         if "429" in error_str or "quota" in error_str or "exhausted" in error_str:
-            raise HTTPException(status_code=429, detail="Per minute request limit exceeded. Please wait 60 seconds before trying again.")
-        raise HTTPException(status_code=500, detail=f"An error occurred while communicating with the AI model: {e}")
+            raise HTTPException(status_code=429, detail="AI quota exceeded. Please wait a moment.")
+        raise HTTPException(status_code=500, detail=f"AI Error: {e}")
 
     return {
         "answer": response.text if response.text else "The AI could not generate a response. Please try rephrasing your question."
