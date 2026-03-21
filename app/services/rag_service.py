@@ -7,7 +7,14 @@ import google.generativeai as genai
 
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
-def ask_question(request,db,user):
+# Initialize the model at the module level to reuse it
+model_lite = genai.GenerativeModel(
+    model_name="gemini-3.1-flash-lite-preview",
+    system_instruction="You are a specialized document analyzer. You always respond with structured Markdown," \
+                       " using headers and bullet points. Never mention 'Based on the provided context'—just provide the answer directly and professionally."
+)
+
+async def ask_question(request, db, user):
     question = request.question
     document_id = request.document_id
 
@@ -19,29 +26,23 @@ def ask_question(request,db,user):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found or access denied")
 
-    # Get question embedding
-    # this sends the data according to the function create_embeddings 
-    # it accepts the things in list format beacuse it was originally assigned to accept all the chunks of text from the pdf
-    # to store to the db but now we only giving a single question to that so we write like  [question]
-    # and from that we extract the ["embeddings"] were the vector data lies
-    # after this step we get the vector data for the asked question
-
     # Get question embedding with retrieval_query task type for better accuracy
     # Passing task_type="retrieval_query" is recommended for the search query
-    from google.generativeai import embed_content
-    question_embedding_data = genai.embed_content(
-        model="models/gemini-embedding-001",
-        content=question,
-        task_type="retrieval_query"
-    )
-    requested_question_embedding = question_embedding_data["embedding"]
+    try:
+        question_embedding_data = await genai.embed_content_async(
+            model="models/gemini-embedding-001",
+            content=question,
+            task_type="retrieval_query"
+        )
+        requested_question_embedding = question_embedding_data["embedding"]
+    except Exception as e:
+        print(f"❌ Error during embedding: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process question embedding.")
 
-    # now we have to query through the vector_db collections to find the match
-    results= collection.query(
+    # ChromaDB query (currently synchronous, but normally very fast)
+    results = collection.query(
         query_embeddings=[requested_question_embedding],
-        # finds the closest 5 vector datas
         n_results=5,
-        # security check cannot access other users pdf of the same
         where={
             "$and": [
                 {"user_id": user.id},
@@ -51,14 +52,13 @@ def ask_question(request,db,user):
     )
 
     # extracts the text 
-    chunks = results["documents"][0]
+    chunks = results.get("documents", [[]])[0]
     
     if not chunks:
         return {"answer": "I'm sorry, I couldn't find any relevant information in the selected document to answer your question."}
 
-    # joins all of the to create a string
+    # joins all to create context string
     context = "\n".join(chunks)
-
 
     prompt = f"""
         You are a professional AI Document Assistant. 
@@ -73,27 +73,21 @@ def ask_question(request,db,user):
         FORMATTING INSTRUCTIONS:
         1. Use **Markdown** for clarity.
         2. Use ## for section headings if the answer is long.
-        3. Use bullet points for lists of features, skills, or facts.
-        4. Use **bold text** for key terms or names.
-        5. If the answer is not in the context, say: "I'm sorry, but the document does not contain information regarding [topic]."
-        6. Keep the tone professional and concise.
-        """
-    
-    model = genai.GenerativeModel(model_name ="gemini-3.1-flash-lite-preview",
-        system_instruction="You are a specialized document analyzer. You always respond with structured Markdown," \
-        " using headers and bullet points. Never mention 'Based on the provided context'—just provide the answer directly and professionally."
-        
-        ) # gemini-1.5-flash-latest 👍
+        3. Use bullet points for lists.
+        4. Use **bold text** for key terms.
+        5. If the answer is not in context, say: "I'm sorry, but the document does not contain information regarding [topic]."
+        6. Tone: Professional and concise.
+    """
     
     try:
-        response = model.generate_content(prompt)
+        # Use async call for content generation
+        response = await model_lite.generate_content_async(prompt)
+        return {
+            "answer": response.text if response.text else "The AI could not generate a response. Please try rephrasing."
+        }
     except Exception as e:
-        # Check if it's a rate limit exception
         error_str = str(e).lower()
-        if "429" in error_str or "quota" in error_str or "exhausted" in error_str:
+        if "429" in error_str or "quota" in error_str:
             raise HTTPException(status_code=429, detail="AI quota exceeded. Please wait a moment.")
-        raise HTTPException(status_code=500, detail=f"AI Error: {e}")
-
-    return {
-        "answer": response.text if response.text else "The AI could not generate a response. Please try rephrasing your question."
-    }
+        print(f"❌ AI Generation Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Generation Error: {e}")

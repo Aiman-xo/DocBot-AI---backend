@@ -9,8 +9,8 @@ from fastapi import HTTPException,status
 router = APIRouter(prefix='/rag')
 
 @router.post('/',response_model=RagResponse)
-def ask_question_to_rag(request:RagRequest,db:Session=Depends(get_db),user=Depends(get_current_user)):
-    answer = ask_question(request,db,user)
+async def ask_question_to_rag(request:RagRequest,db:Session=Depends(get_db),user=Depends(get_current_user)):
+    answer = await ask_question(request,db,user)
 
     if not answer:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail='Couldnt retrieve answer')
