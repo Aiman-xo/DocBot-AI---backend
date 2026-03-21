@@ -12,13 +12,13 @@ UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-def post_document(document, user, db):
+async def post_document(document, user, db):
     unique_filename = f"{uuid.uuid4()}_{document.filename}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
     with open(file_path, "wb") as f:
-        # Use a chunked read/write for memory efficiency and speed
-        while chunk := document.file.read(1024 * 1024):  # 1MB chunks
+        # Use await with document.read for async efficiency! 🚀
+        while chunk := await document.read(1024 * 1024):  # 1MB chunks
             f.write(chunk)
 
     new_doc = DocumentModel(

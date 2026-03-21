@@ -21,24 +21,24 @@ async def create_embeddings(chunks):
         return [{"text": chunks, "embedding": response['embedding']}]
 
     batch_size = 90  # Gemini safe limit
+    semaphore = asyncio.Semaphore(5)  # Limit concurrency to 5 parallel requests
     
-    # Create tasks for all batches to run in parallel
-    tasks = []
     batches = [chunks[i : i + batch_size] for i in range(0, len(chunks), batch_size)]
     
     async def process_batch(current_batch):
-        try:
-            response = await genai.embed_content_async(
-                model="models/gemini-embedding-001",
-                content=current_batch,
-                task_type="retrieval_document"
-            )
-            return list(zip(current_batch, response['embedding']))
-        except Exception as e:
-            print(f"❌ Error in embedding batch: {e}")
-            return []
+        async with semaphore:
+            try:
+                response = await genai.embed_content_async(
+                    model="models/gemini-embedding-001",
+                    content=current_batch,
+                    task_type="retrieval_document"
+                )
+                return list(zip(current_batch, response['embedding']))
+            except Exception as e:
+                print(f"❌ Error in embedding batch: {e}")
+                return []
 
-    # Run all batches in parallel! 🚀
+    # Run batches in parallel, but limited by the semaphore! 🚦 
     results = await asyncio.gather(*(process_batch(b) for b in batches))
     
     embeddings = []
