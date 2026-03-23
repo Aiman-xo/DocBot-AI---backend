@@ -4,15 +4,18 @@ from app.ingestions.embeddings import create_embeddings
 from app.core.config import settings
 from fastapi import HTTPException
 import google.generativeai as genai
+import asyncio
+
 
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 # Initialize the model at the module level to reuse it
 model_lite = genai.GenerativeModel(
-    model_name="gemini-3.1-flash-lite-preview",
+    model_name="gemini-3.1-flash-lite",
     system_instruction="You are a specialized document analyzer. You always respond with structured Markdown," \
                        " using headers and bullet points. Never mention 'Based on the provided context'—just provide the answer directly and professionally."
 )
+
 
 async def ask_question(request, db, user):
     question = request.question
@@ -39,8 +42,9 @@ async def ask_question(request, db, user):
         print(f"❌ Error during embedding: {e}")
         raise HTTPException(status_code=500, detail="Failed to process question embedding.")
 
-    # ChromaDB query (currently synchronous, but normally very fast)
-    results = collection.query(
+    # ChromaDB query (wrapped in to_thread to prevent blocking the single-worker server)
+    results = await asyncio.to_thread(
+        collection.query,
         query_embeddings=[requested_question_embedding],
         n_results=5,
         where={
@@ -59,6 +63,7 @@ async def ask_question(request, db, user):
 
     # joins all to create context string
     context = "\n".join(chunks)
+
 
     prompt = f"""
         You are a professional AI Document Assistant. 
