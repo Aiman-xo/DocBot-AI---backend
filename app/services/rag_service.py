@@ -1,5 +1,5 @@
 from app.models.document_model import DocumentModel
-from app.vectorstore.chromadb_client import collection
+from app.vectorstore.chromadb_client import query_embeddings
 from app.core.config import settings
 from fastapi import HTTPException
 import asyncio
@@ -60,6 +60,7 @@ async def generate_content_rest(prompt: str):
 
 
 async def ask_question(request, db, user):
+    print("🚀 [RAG] Starting ask_question request")
     question = request.question
     document_id = request.document_id
 
@@ -72,14 +73,20 @@ async def ask_question(request, db, user):
     )
 
     if not doc:
+        print("❌ [RAG] Document not found")
         raise HTTPException(status_code=404, detail="Document not found or access denied")
 
-    # Get question embedding with the lightweight REST approach
-    requested_question_embedding = await get_embedding_rest(question)
+    print(f"✅ [RAG] Found Document in SQL: {doc.id}")
 
+    # Get question embedding with the lightweight REST approach
+    print("⏳ [RAG] Calling Gemini REST API for Embedding...")
+    requested_question_embedding = await get_embedding_rest(question)
+    print("✅ [RAG] Successfully got embeddings from Gemini")
+
+    print("⏳ [RAG] Querying ChromaDB (This might take time on first run)...")
     # ChromaDB query (wrapped in to_thread to prevent blocking)
     results = await asyncio.to_thread(
-        collection.query,
+        query_embeddings,
         query_embeddings=[requested_question_embedding],
         n_results=5,
         where={
@@ -118,8 +125,10 @@ async def ask_question(request, db, user):
         6. Tone: Professional and concise.
     """
     
+    print("✅ [RAG] Found ChromaDB chunks, sending prompt to Gemini REST API...")
     # Generate content with the lightweight REST approach
     answer_text = await generate_content_rest(prompt)
+    print("✅ [RAG] Gemini returned the answer successfully!")
     
     return {
         "answer": answer_text

@@ -143,7 +143,6 @@
 fastapi
 uvicorn
 gunicorn
-google-generativeai
 python-dotenv
 python-multipart
 pypdf
