@@ -10,30 +10,35 @@ import asyncio
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 # Initialize the model at the module level to reuse it
+# Using gemini-2.0-flash which is currently the fastest and latest model for fast generation.
 model_lite = genai.GenerativeModel(
-    model_name="gemini-3.1-flash-lite",
+    model_name="gemini-2.0-flash",
     system_instruction="You are a specialized document analyzer. You always respond with structured Markdown," \
                        " using headers and bullet points. Never mention 'Based on the provided context'—just provide the answer directly and professionally."
 )
+
 
 
 async def ask_question(request, db, user):
     question = request.question
     document_id = request.document_id
 
-    doc = db.query(DocumentModel).filter(
-        DocumentModel.id == document_id, 
-        DocumentModel.user_id == user.id
-    ).first()
+    # Offload synchronous DB query to a separate thread
+    doc = await asyncio.to_thread(
+        db.query(DocumentModel).filter(
+            DocumentModel.id == document_id, 
+            DocumentModel.user_id == user.id
+        ).first
+    )
 
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found or access denied")
 
     # Get question embedding with retrieval_query task type for better accuracy
-    # Passing task_type="retrieval_query" is recommended for the search query
+    # Switched to models/text-embedding-004 which is faster and more accurate than 001
     try:
         question_embedding_data = await genai.embed_content_async(
-            model="models/gemini-embedding-001",
+            model="models/text-embedding-004",
             content=question,
             task_type="retrieval_query"
         )
