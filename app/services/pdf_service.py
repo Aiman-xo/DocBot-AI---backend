@@ -36,18 +36,29 @@ async def post_document(document, user, db):
 async def process_document_background(file_path: str, user_id: int, document_id: int):
     # This runs in background to prevent timeout
     try:
-        text = extract_pdf_to_text(file_path)
-        chunks = creating_chunks(text)
+        print(f"🔄 [UPLOAD] Starting background processing for doc_id: {document_id}")
         
-        # Parallel asynchronous embedding generation
+        # CPU-heavy tasks must run in to_thread to prevent event loop blocking!
+        text = await asyncio.to_thread(extract_pdf_to_text, file_path)
+        chunks = await asyncio.to_thread(creating_chunks, text)
+        
+        # Parallel asynchronous embedding generation (uses HTTPX)
+        print(f"⏳ [UPLOAD] Generating {len(chunks)} embeddings...")
         embeddings = await create_embeddings(chunks)
         
-        store_embeddings(
-            embeddings=embeddings,
-            user_id=user_id,
-            document_id=document_id
-        )
-        print(f"✅ Successfully processed and stored embeddings for doc_id: {document_id}")
+        # Synchronous DB operation must run in to_thread
+        if embeddings:
+            print("⏳ [UPLOAD] Storing embeddings in ChromaDB...")
+            await asyncio.to_thread(
+                store_embeddings,
+                embeddings, # Not passed by name to avoid kwarg issues if store_embeddings signature differs
+                user_id,
+                document_id
+            )
+            print(f"✅ [UPLOAD] Successfully processed and stored {len(embeddings)} embeddings for doc_id: {document_id}")
+        else:
+            print(f"⚠️ [UPLOAD] No embeddings generated for doc_id: {document_id}")
+
     except Exception as e:
         print(f"❌ Error processing document in background: {e}")
 

@@ -98,17 +98,21 @@ async def ask_question(request, db, user):
     )
 
     # extracts the text 
-    chunks = results.get("documents", [[]])[0]
+    chunks = results.get("documents", [[]])[0] if results and "documents" in results else []
     
     if not chunks:
-        return {"answer": "I'm sorry, I couldn't find any relevant information in the selected document to answer your question."}
-
-    # joins all to create context string
-    context = "\n".join(chunks)
+        print("⚠️ [RAG] ChromaDB returned 0 chunks (Document may still be processing or failed to upload)")
+        context = "No document content is currently available. If the user asks about the document, inform them that the document appears to be empty or is still processing."
+    else:
+        context = "\n".join(chunks)
 
     prompt = f"""
-        You are a professional AI Document Assistant. 
-        Your goal is to answer the user's question using ONLY the provided context.
+        You are a friendly and professional AI Document Assistant. 
+        
+        INSTRUCTIONS:
+        1. If the user's input is a casual greeting (like "hi", "hello", "what's up"), respond politely and ask how you can help them with their document.
+        2. If the user asks a question about the document, you MUST answer it using ONLY the provided context below.
+        3. If the answer is not in the context, say: "I'm sorry, but the document does not contain information regarding this topic."
 
         CONTEXT FROM DOCUMENT:
         {context}
@@ -121,8 +125,7 @@ async def ask_question(request, db, user):
         2. Use ## for section headings if the answer is long.
         3. Use bullet points for lists.
         4. Use **bold text** for key terms.
-        5. If the answer is not in context, say: "I'm sorry, but the document does not contain information regarding [topic]."
-        6. Tone: Professional and concise.
+        5. Tone: Professional, helpful, and concise.
     """
     
     print("✅ [RAG] Found ChromaDB chunks, sending prompt to Gemini REST API...")
