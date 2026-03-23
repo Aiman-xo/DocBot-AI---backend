@@ -35,10 +35,10 @@ async def ask_question(request, db, user):
         raise HTTPException(status_code=404, detail="Document not found or access denied")
 
     # Get question embedding with retrieval_query task type for better accuracy
-    # Switched to models/text-embedding-004 which is faster and more accurate than 001
+    # Using gemini-embedding-001 for maximum compatibility
     try:
         question_embedding_data = await genai.embed_content_async(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             content=question,
             task_type="retrieval_query"
         )

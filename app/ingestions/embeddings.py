@@ -14,7 +14,7 @@ async def create_embeddings(chunks):
     # If it's a single string, handle it
     if isinstance(chunks, str):
         response = await genai.embed_content_async(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             content=chunks,
             task_type="retrieval_document"
         )
@@ -29,7 +29,7 @@ async def create_embeddings(chunks):
         async with semaphore:
             try:
                 response = await genai.embed_content_async(
-                    model="models/text-embedding-004",
+                    model="models/gemini-embedding-001",
                     content=current_batch,
                     task_type="retrieval_document"
                 )
