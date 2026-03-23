@@ -9,13 +9,20 @@ import asyncio
 
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
-# Initialize the model at the module level to reuse it
-# Using gemini-2.0-flash which is currently the fastest and latest model for fast generation.
-model_lite = genai.GenerativeModel(
-    model_name="gemini-2.5-flash",
-    system_instruction="You are a specialized document analyzer. You always respond with structured Markdown," \
-                       " using headers and bullet points. Never mention 'Based on the provided context'—just provide the answer directly and professionally."
-)
+# LAZY LOADING: We don't initialize the model globally. 
+# This prevents the server from crashing or hanging during the initial 2-minute Render bootup on 512MB RAM.
+_model_instance = None
+
+def get_chat_model():
+    global _model_instance
+    if _model_instance is None:
+        # Using gemini-3.1-flash (gemini-flash-latest) which is the most stable and fast model for RAG.
+        _model_instance = genai.GenerativeModel(
+            model_name="gemini-flash-latest", 
+            system_instruction="You are a specialized document analyzer. You always respond with structured Markdown," \
+                               " using headers and bullet points. Never mention 'Based on the provided context'—just provide the answer directly and professionally."
+        )
+    return _model_instance
 
 
 
@@ -90,8 +97,11 @@ async def ask_question(request, db, user):
     """
     
     try:
+        # Get the model instance lazily
+        model = get_chat_model()
+        
         # Use async call for content generation
-        response = await model_lite.generate_content_async(prompt)
+        response = await model.generate_content_async(prompt)
         return {
             "answer": response.text if response.text else "The AI could not generate a response. Please try rephrasing."
         }
