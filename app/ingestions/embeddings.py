@@ -1,52 +1,65 @@
-import google.generativeai as genai
+import httpx
+import asyncio
 from app.core.config import settings
 
-genai.configure(api_key=settings.GEMINI_API_KEY)
+# LIGHTWEIGHT REST API INGESTION
+# Instead of importing the heavy 'google-generativeai' SDK (which uses 100MB+ RAM),
+# we call the Gemini API directly via HTTPX to stay under Render's 512MB limit.
 
-
-import asyncio
-
-# this creates the vector data for the chunks of texts we extract from the pdf
-async def create_embeddings(chunks):
+async def create_embeddings_rest(chunks):
+    """Create embeddings for PDF chunks using Gemini REST API (Low memory)"""
     if not chunks:
         return []
 
     # If it's a single string, handle it
-    if isinstance(chunks, str):
-        response = await genai.embed_content_async(
-            model="models/gemini-embedding-001",
-            content=chunks,
-            task_type="retrieval_document"
-        )
-        return [{"text": chunks, "embedding": response['embedding']}]
-
-    batch_size = 90  # Gemini safe limit
-    semaphore = asyncio.Semaphore(5)  # Limit concurrency to 5 parallel requests
+    is_single = isinstance(chunks, str)
+    chunk_list = [chunks] if is_single else chunks
     
-    batches = [chunks[i : i + batch_size] for i in range(0, len(chunks), batch_size)]
+    # Gemini allows batch embedding of up to 100 per request
+    batch_size = 90
+    semaphore = asyncio.Semaphore(3)  # Reduce concurrency to save RAM on 512MB limit
+    
+    batches = [chunk_list[i : i + batch_size] for i in range(0, len(chunk_list), batch_size)]
     
     async def process_batch(current_batch):
+        # Using v1beta for embedding batches
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key={settings.GEMINI_API_KEY}"
+        
+        requests = []
+        for text in current_batch:
+            requests.append({
+                "model": "models/gemini-embedding-001",
+                "content": {"parts": [{"text": text}]},
+                "task_type": "RETRIEVAL_DOCUMENT"
+            })
+            
+        payload = {"requests": requests}
+        
         async with semaphore:
-            try:
-                response = await genai.embed_content_async(
-                    model="models/gemini-embedding-001",
-                    content=current_batch,
-                    task_type="retrieval_document"
-                )
-                return list(zip(current_batch, response['embedding']))
-            except Exception as e:
-                print(f"❌ Error in embedding batch: {e}")
-                return []
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                try:
+                    response = await client.post(url, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    # extract embeddings from the batch response
+                    return list(zip(current_batch, [emb["values"] for emb in data["embeddings"]]))
+                except Exception as e:
+                    print(f"❌ REST Embedding Batch Error: {e}")
+                    return []
 
-    # Run batches in parallel, but limited by the semaphore! 🚦 
+    # Run batches in parallel, but limited by the semaphore to save memory
     results = await asyncio.gather(*(process_batch(b) for b in batches))
     
-    embeddings = []
+    all_embeddings = []
     for batch_result in results:
         for text, emb in batch_result:
-            embeddings.append({
+            all_embeddings.append({
                 "text": text,
                 "embedding": emb
             })
 
-    return embeddings
+    return all_embeddings
+
+# Map the old create_embeddings to the new REST version for compatibility
+async def create_embeddings(chunks):
+    return await create_embeddings_rest(chunks)
