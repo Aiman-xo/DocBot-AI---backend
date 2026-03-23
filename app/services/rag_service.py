@@ -31,8 +31,8 @@ async def get_embedding_rest(text: str):
 
 async def generate_content_rest(prompt: str):
     """Generate content using Gemini REST API (Low memory)"""
-    # Using gemini-2.0-flash: High speed and production-stable for 2026.
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+    # Using gemini-3.1-flash-lite-preview: Extremely fast, lightweight preview model
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key={settings.GEMINI_API_KEY}"
     payload = {
         "contents": [{
             "parts": [{"text": prompt}]
