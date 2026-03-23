@@ -12,7 +12,7 @@ genai.configure(api_key=settings.GEMINI_API_KEY)
 # Initialize the model at the module level to reuse it
 # Using gemini-2.0-flash which is currently the fastest and latest model for fast generation.
 model_lite = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
+    model_name="gemini-2.5-flash",
     system_instruction="You are a specialized document analyzer. You always respond with structured Markdown," \
                        " using headers and bullet points. Never mention 'Based on the provided context'—just provide the answer directly and professionally."
 )

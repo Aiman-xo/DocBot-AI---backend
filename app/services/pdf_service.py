@@ -17,7 +17,7 @@ async def post_document(document, user, db):
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
     with open(file_path, "wb") as f:
-        # Use await with document.read for async efficiency! 🚀
+        # Use await with document.read for async efficiency! 
         while chunk := await document.read(1024 * 1024):  # 1MB chunks
             f.write(chunk)
 
