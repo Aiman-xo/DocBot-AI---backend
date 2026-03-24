@@ -54,8 +54,11 @@ async def generate_content_rest(prompt: str):
             data = response.json()
             # extracts the text 
             return data["candidates"][0]["content"]["parts"][0]["text"]
+        except httpx.HTTPStatusError as e:
+            print(f"Gemini API Status Error: {e.response.status_code} - {e.response.text}")
+            raise HTTPException(status_code=500, detail="Failed to generate AI response.")
         except Exception as e:
-            
+            print(f"Gemini API Exception: {str(e)}")
             raise HTTPException(status_code=500, detail="Failed to generate AI response.")
 
 
