@@ -26,7 +26,7 @@ async def get_embedding_rest(text: str):
             data = response.json()
             return data["embedding"]["values"]
         except Exception as e:
-            print(f"❌ REST Embedding Error: {e}")
+            
             raise HTTPException(status_code=500, detail="Failed to get question embedding.")
 
 async def generate_content_rest(prompt: str):
@@ -55,12 +55,12 @@ async def generate_content_rest(prompt: str):
             # extracts the text 
             return data["candidates"][0]["content"]["parts"][0]["text"]
         except Exception as e:
-            print(f"❌ REST Generation Error: {e}")
+            
             raise HTTPException(status_code=500, detail="Failed to generate AI response.")
 
 
 async def ask_question(request, db, user):
-    print("🚀 [RAG] Starting ask_question request")
+    
     question = request.question
     document_id = request.document_id
 
@@ -73,17 +73,13 @@ async def ask_question(request, db, user):
     )
 
     if not doc:
-        print("❌ [RAG] Document not found")
+        
         raise HTTPException(status_code=404, detail="Document not found or access denied")
 
     print(f"✅ [RAG] Found Document in SQL: {doc.id}")
 
     # Get question embedding with the lightweight REST approach
-    print("⏳ [RAG] Calling Gemini REST API for Embedding...")
     requested_question_embedding = await get_embedding_rest(question)
-    print("✅ [RAG] Successfully got embeddings from Gemini")
-
-    print("⏳ [RAG] Querying ChromaDB (This might take time on first run)...")
     # ChromaDB query (wrapped in to_thread to prevent blocking)
     results = await asyncio.to_thread(
         query_embeddings,
@@ -101,7 +97,6 @@ async def ask_question(request, db, user):
     chunks = results.get("documents", [[]])[0] if results and "documents" in results else []
     
     if not chunks:
-        print("⚠️ [RAG] ChromaDB returned 0 chunks (Document may still be processing or failed to upload)")
         context = "No document content is currently available. If the user asks about the document, inform them that the document appears to be empty or is still processing."
     else:
         context = "\n".join(chunks)
@@ -127,11 +122,8 @@ async def ask_question(request, db, user):
         4. Use **bold text** for key terms.
         5. Tone: Professional, helpful, and concise.
     """
-    
-    print("✅ [RAG] Found ChromaDB chunks, sending prompt to Gemini REST API...")
     # Generate content with the lightweight REST approach
     answer_text = await generate_content_rest(prompt)
-    print("✅ [RAG] Gemini returned the answer successfully!")
     
     return {
         "answer": answer_text

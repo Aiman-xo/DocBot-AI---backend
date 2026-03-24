@@ -17,7 +17,8 @@ async def create_embeddings_rest(chunks):
     
     # Gemini allows batch embedding of up to 100 per request
     batch_size = 90
-    semaphore = asyncio.Semaphore(3)  # Reduce concurrency to save RAM on 512MB limit
+    semaphore = asyncio.Semaphore(3)  # Reduce concurrency to save RAM on 512MB limit , allows 3 batch per request after 1 batch finishes
+    # others can start sending the embedding request to google.
     
     batches = [chunk_list[i : i + batch_size] for i in range(0, len(chunk_list), batch_size)]
     
@@ -44,7 +45,6 @@ async def create_embeddings_rest(chunks):
                     # extract embeddings from the batch response
                     return list(zip(current_batch, [emb["values"] for emb in data["embeddings"]]))
                 except Exception as e:
-                    print(f"❌ REST Embedding Batch Error: {e}")
                     return []
 
     # Run batches in parallel, but limited by the semaphore to save memory
