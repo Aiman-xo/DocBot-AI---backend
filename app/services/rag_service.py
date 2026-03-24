@@ -30,35 +30,39 @@ async def get_embedding_rest(text: str):
             raise HTTPException(status_code=500, detail="Failed to get question embedding.")
 
 async def generate_content_rest(prompt: str):
-    """Generate content using Gemini REST API (Low memory)"""
-    # Using gemini-3.1-flash-lite-preview: Extremely fast, lightweight preview model
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key={settings.GEMINI_API_KEY}"
+    """Generate content using Groq REST API with llama-3.1-8b-instant"""
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
     payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }],
-        "system_instruction": {
-            "parts": [{"text": "You are a specialized document analyzer. You always respond with structured Markdown, using headers and bullet points. Never mention 'Based on the provided context'—just provide the answer directly and professionally."}]
-        },
-        "generationConfig": {
-            "temperature": 0.2,
-            "topP": 0.8,
-            "topK": 40
-        }
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {
+                "role": "system", 
+                "content": "You are a specialized document analyzer. You always respond with structured Markdown, using headers and bullet points. Never mention 'Based on the provided context'—just provide the answer directly and professionally."
+            },
+            {
+                "role": "user", 
+                "content": prompt
+            }
+        ],
+        "temperature": 0.2
     }
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
-            # extracts the text 
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            # Extracts the text from the OpenAI-compatible response format
+            return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as e:
-            print(f"Gemini API Status Error: {e.response.status_code} - {e.response.text}")
+            print(f"Groq API Status Error: {e.response.status_code} - {e.response.text}")
             raise HTTPException(status_code=500, detail="Failed to generate AI response.")
         except Exception as e:
-            print(f"Gemini API Exception: {str(e)}")
+            print(f"Groq API Exception: {str(e)}")
             raise HTTPException(status_code=500, detail="Failed to generate AI response.")
 
 
